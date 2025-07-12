@@ -1,0 +1,119 @@
+name: "R Research Environment"
+description: "R + RStudio Server + tidyverse packages for statistical analysis"
+base: "ubuntu-22.04-server-lts"
+architecture: "x86_64"  # Default architecture, will be overridden during build
+
+build_steps:
+  - name: "System updates"
+    script: |
+      apt-get update -y && apt-get upgrade -y
+      apt-get install -y build-essential curl wget software-properties-common
+
+  - name: "Install R"
+    script: |
+      apt-get install -y r-base r-base-dev
+
+  - name: "Install RStudio Server"
+    script: |
+      # Detect architecture and install appropriate RStudio Server
+      ARCH=$(uname -m)
+      if [ "$ARCH" = "x86_64" ]; then
+        wget https://download2.rstudio.org/server/jammy/amd64/rstudio-server-2023.06.1-524-amd64.deb
+        dpkg -i rstudio-server-2023.06.1-524-amd64.deb || true
+      elif [ "$ARCH" = "aarch64" ]; then
+        wget https://download2.rstudio.org/server/jammy/arm64/rstudio-server-2023.06.1-524-arm64.deb
+        dpkg -i rstudio-server-2023.06.1-524-arm64.deb || true
+      fi
+      apt-get install -f -y
+
+  - name: "Install R packages"
+    script: |
+      # Install common R packages
+      R -e "install.packages(c('tidyverse','ggplot2','dplyr','readr'), repos='http://cran.rstudio.com/')"
+
+  - name: "Configure RStudio"
+    script: |
+      echo "www-port=8787" >> /etc/rstudio/rserver.conf
+      systemctl restart rstudio-server
+
+  - name: "Set up user environment"
+    script: |
+      # Create ubuntu user for RStudio if it doesn't exist
+      id -u ubuntu &>/dev/null || useradd -m -s /bin/bash ubuntu
+      echo "ubuntu:password123" | chpasswd
+      
+      # Create example R script in ubuntu home directory
+      mkdir -p /home/ubuntu/examples
+      cat > /home/ubuntu/examples/example.R << 'EOF'
+      # Example R script
+      library(tidyverse)
+      
+      # Create some sample data
+      data <- tibble(
+        x = rnorm(100),
+        y = x * 2 + rnorm(100)
+      )
+      
+      # Create a plot
+      ggplot(data, aes(x = x, y = y)) +
+        geom_point() +
+        geom_smooth(method = "lm") +
+        theme_minimal() +
+        labs(title = "Sample Regression Plot",
+             subtitle = "Created with ggplot2",
+             x = "X Variable",
+             y = "Y Variable")
+      
+      # Print summary of linear model
+      model <- lm(y ~ x, data = data)
+      summary(model)
+      EOF
+      chown -R ubuntu:ubuntu /home/ubuntu/examples
+
+  - name: "Cleanup"
+    script: |
+      apt-get autoremove -y && apt-get autoclean
+      rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+      # Remove downloaded packages
+      rm -f /root/rstudio-server-*.deb
+      # Create setup log
+      echo "Setup complete" > /var/log/cws-setup.log
+
+validation:
+  - name: "R installed"
+    command: "R --version"
+    contains: "R version"
+  
+  - name: "RStudio Server installed"
+    command: "systemctl status rstudio-server"
+    success: true
+  
+  - name: "RStudio Server running"
+    command: "systemctl is-active rstudio-server"
+    equals: "active"
+  
+  - name: "Tidyverse package installed"
+    command: "R -e 'library(tidyverse); packageVersion(\"tidyverse\")'"
+    success: true
+  
+  - name: "ggplot2 package installed"
+    command: "R -e 'library(ggplot2); packageVersion(\"ggplot2\")'"
+    success: true
+
+tags:
+  Name: "r-research"
+  Type: "research"
+  Software: "R,RStudio,tidyverse"
+  Category: "statistics"
+
+instance_types:
+  x86_64: "t3.medium"
+  arm64: "t4g.medium"
+
+ports:
+  - 22   # SSH
+  - 8787 # RStudio Server
+
+estimated_cost_per_hour:
+  x86_64: 0.0464
+  arm64: 0.0368

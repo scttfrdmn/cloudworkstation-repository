@@ -1,0 +1,309 @@
+name: "Python Research Environment"
+description: "Python + Jupyter + data science packages for research and analysis"
+base: "ubuntu-22.04-server-lts"
+architecture: "x86_64"  # Default architecture, will be overridden during build
+
+build_steps:
+  - name: "System updates"
+    script: |
+      apt-get update -y && apt-get upgrade -y
+      apt-get install -y build-essential curl wget software-properties-common git
+
+  - name: "Install Python"
+    script: |
+      apt-get install -y python3 python3-pip python3-dev
+      update-alternatives --install /usr/bin/python python /usr/bin/python3 1
+      
+      # Install system dependencies for scientific packages
+      apt-get install -y libopenblas-dev liblapack-dev gfortran
+
+  - name: "Install Python packages"
+    script: |
+      # Upgrade pip
+      python3 -m pip install --upgrade pip setuptools wheel
+      
+      # Install Jupyter and data science packages
+      python3 -m pip install jupyter pandas numpy matplotlib seaborn scikit-learn scipy statsmodels
+
+  - name: "Configure Jupyter"
+    script: |
+      # Create jupyter directory
+      mkdir -p /home/ubuntu/.jupyter
+      
+      # Create Jupyter configuration
+      cat > /home/ubuntu/.jupyter/jupyter_notebook_config.py << 'JUPYTER_EOF'
+      c.NotebookApp.ip = '0.0.0.0'
+      c.NotebookApp.port = 8888
+      c.NotebookApp.open_browser = False
+      c.NotebookApp.token = ''
+      c.NotebookApp.password = ''
+      JUPYTER_EOF
+      
+      # Ensure correct ownership
+      chown -R ubuntu:ubuntu /home/ubuntu/.jupyter
+
+  - name: "Create Jupyter service"
+    script: |
+      # Create systemd service for Jupyter
+      cat > /etc/systemd/system/jupyter.service << 'SERVICE_EOF'
+      [Unit]
+      Description=Jupyter Notebook Server
+      After=network.target
+      
+      [Service]
+      Type=simple
+      User=ubuntu
+      Group=ubuntu
+      WorkingDirectory=/home/ubuntu
+      ExecStart=/usr/bin/python3 -m jupyter notebook --config=/home/ubuntu/.jupyter/jupyter_notebook_config.py
+      Restart=on-failure
+      RestartSec=10
+      
+      [Install]
+      WantedBy=multi-user.target
+      SERVICE_EOF
+      
+      # Enable and start Jupyter service
+      systemctl daemon-reload
+      systemctl enable jupyter
+      systemctl start jupyter
+
+  - name: "Create example notebooks"
+    script: |
+      # Create example notebooks directory
+      mkdir -p /home/ubuntu/examples
+      
+      # Create a data analysis example notebook
+      cat > /home/ubuntu/examples/data_analysis_example.ipynb << 'NOTEBOOK_EOF'
+      {
+        "cells": [
+          {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": ["# Data Analysis with Python\n", "\n", "This notebook demonstrates basic data analysis using pandas, numpy, and matplotlib."]
+          },
+          {
+            "cell_type": "code",
+            "execution_count": null,
+            "metadata": {},
+            "source": ["import numpy as np\n", "import pandas as pd\n", "import matplotlib.pyplot as plt\n", "import seaborn as sns\n", "\n", "# Set plot style\n", "plt.style.use('ggplot')\n", "sns.set(style=\"whitegrid\")\n", "\n", "# Display plots inline\n", "%matplotlib inline"]
+          },
+          {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": ["## Generate Sample Data"]
+          },
+          {
+            "cell_type": "code",
+            "execution_count": null,
+            "metadata": {},
+            "source": ["# Create sample data\n", "np.random.seed(42)\n", "data = pd.DataFrame({\n", "    'x': np.random.normal(0, 1, 1000),\n", "    'y': np.random.normal(0, 1, 1000),\n", "    'group': np.random.choice(['A', 'B', 'C', 'D'], 1000)\n", "})\n", "\n", "# Create some correlations\n", "data['z'] = data['x'] * 0.8 + data['y'] * 0.2 + np.random.normal(0, 0.2, 1000)\n", "\n", "data.head()"]
+          },
+          {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": ["## Basic Data Analysis"]
+          },
+          {
+            "cell_type": "code",
+            "execution_count": null,
+            "metadata": {},
+            "source": ["# Summary statistics\n", "data.describe()"]
+          },
+          {
+            "cell_type": "code",
+            "execution_count": null,
+            "metadata": {},
+            "source": ["# Visualize distributions\n", "fig, axes = plt.subplots(1, 3, figsize=(15, 5))\n", "sns.histplot(data['x'], kde=True, ax=axes[0])\n", "axes[0].set_title('X Distribution')\n", "sns.histplot(data['y'], kde=True, ax=axes[1])\n", "axes[1].set_title('Y Distribution')\n", "sns.histplot(data['z'], kde=True, ax=axes[2])\n", "axes[2].set_title('Z Distribution')\n", "plt.tight_layout()"]
+          },
+          {
+            "cell_type": "code",
+            "execution_count": null,
+            "metadata": {},
+            "source": ["# Correlation between variables\n", "sns.heatmap(data[['x', 'y', 'z']].corr(), annot=True, cmap='coolwarm')\n", "plt.title('Correlation Matrix')"]
+          }
+        ],
+        "metadata": {
+          "kernelspec": {
+            "display_name": "Python 3",
+            "language": "python",
+            "name": "python3"
+          },
+          "language_info": {
+            "codemirror_mode": {
+              "name": "ipython",
+              "version": 3
+            },
+            "file_extension": ".py",
+            "mimetype": "text/x-python",
+            "name": "python",
+            "nbconvert_exporter": "python",
+            "pygments_lexer": "ipython3",
+            "version": "3.8.10"
+          }
+        },
+        "nbformat": 4,
+        "nbformat_minor": 4
+      }
+      NOTEBOOK_EOF
+      
+      # Create a machine learning example notebook
+      cat > /home/ubuntu/examples/ml_example.ipynb << 'ML_NOTEBOOK_EOF'
+      {
+        "cells": [
+          {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": ["# Machine Learning with scikit-learn\n", "\n", "This notebook demonstrates basic machine learning using scikit-learn."]
+          },
+          {
+            "cell_type": "code",
+            "execution_count": null,
+            "metadata": {},
+            "source": ["import numpy as np\n", "import pandas as pd\n", "import matplotlib.pyplot as plt\n", "import seaborn as sns\n", "\n", "from sklearn.datasets import load_iris\n", "from sklearn.model_selection import train_test_split\n", "from sklearn.preprocessing import StandardScaler\n", "from sklearn.ensemble import RandomForestClassifier\n", "from sklearn.metrics import classification_report, confusion_matrix\n", "\n", "# Set plot style\n", "plt.style.use('ggplot')\n", "sns.set(style=\"whitegrid\")\n", "\n", "# Display plots inline\n", "%matplotlib inline"]
+          },
+          {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": ["## Load and Explore Dataset"]
+          },
+          {
+            "cell_type": "code",
+            "execution_count": null,
+            "metadata": {},
+            "source": ["# Load iris dataset\n", "iris = load_iris()\n", "X = iris.data\n", "y = iris.target\n", "feature_names = iris.feature_names\n", "target_names = iris.target_names\n", "\n", "# Convert to DataFrame\n", "df = pd.DataFrame(X, columns=feature_names)\n", "df['species'] = [target_names[i] for i in y]\n", "\n", "df.head()"]
+          },
+          {
+            "cell_type": "code",
+            "execution_count": null,
+            "metadata": {},
+            "source": ["# Visualize the data\n", "sns.pairplot(df, hue='species')\n", "plt.suptitle('Pairplot of Iris Dataset Features', y=1.02)"]
+          },
+          {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": ["## Train a Machine Learning Model"]
+          },
+          {
+            "cell_type": "code",
+            "execution_count": null,
+            "metadata": {},
+            "source": ["# Split the data\n", "X_train, X_test, y_train, y_test = train_test_split(\n", "    X, y, test_size=0.3, random_state=42)\n", "\n", "# Scale the features\n", "scaler = StandardScaler()\n", "X_train_scaled = scaler.fit_transform(X_train)\n", "X_test_scaled = scaler.transform(X_test)"]
+          },
+          {
+            "cell_type": "code",
+            "execution_count": null,
+            "metadata": {},
+            "source": ["# Train a Random Forest Classifier\n", "clf = RandomForestClassifier(n_estimators=100, random_state=42)\n", "clf.fit(X_train_scaled, y_train)"]
+          },
+          {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": ["## Evaluate the Model"]
+          },
+          {
+            "cell_type": "code",
+            "execution_count": null,
+            "metadata": {},
+            "source": ["# Make predictions\n", "y_pred = clf.predict(X_test_scaled)\n", "\n", "# Print classification report\n", "print(classification_report(y_test, y_pred, target_names=target_names))"]
+          },
+          {
+            "cell_type": "code",
+            "execution_count": null,
+            "metadata": {},
+            "source": ["# Visualize confusion matrix\n", "cm = confusion_matrix(y_test, y_pred)\n", "plt.figure(figsize=(8, 6))\n", "sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', \n", "            xticklabels=target_names, \n", "            yticklabels=target_names)\n", "plt.xlabel('Predicted')\n", "plt.ylabel('True')\n", "plt.title('Confusion Matrix')\n", "plt.tight_layout()"]
+          },
+          {
+            "cell_type": "code",
+            "execution_count": null,
+            "metadata": {},
+            "source": ["# Feature importance\n", "importances = clf.feature_importances_\n", "indices = np.argsort(importances)[::-1]\n", "\n", "plt.figure(figsize=(10, 6))\n", "plt.title('Feature Importance')\n", "plt.bar(range(X.shape[1]), importances[indices], align='center')\n", "plt.xticks(range(X.shape[1]), [feature_names[i] for i in indices], rotation=90)\n", "plt.tight_layout()"]
+          }
+        ],
+        "metadata": {
+          "kernelspec": {
+            "display_name": "Python 3",
+            "language": "python",
+            "name": "python3"
+          },
+          "language_info": {
+            "codemirror_mode": {
+              "name": "ipython",
+              "version": 3
+            },
+            "file_extension": ".py",
+            "mimetype": "text/x-python",
+            "name": "python",
+            "nbconvert_exporter": "python",
+            "pygments_lexer": "ipython3",
+            "version": "3.8.10"
+          }
+        },
+        "nbformat": 4,
+        "nbformat_minor": 4
+      }
+      ML_NOTEBOOK_EOF
+      
+      # Ensure correct ownership
+      chown -R ubuntu:ubuntu /home/ubuntu/examples
+
+  - name: "Set up user environment"
+    script: |
+      # Create ubuntu user if it doesn't exist
+      id -u ubuntu &>/dev/null || useradd -m -s /bin/bash ubuntu
+      echo "ubuntu:password123" | chpasswd
+
+  - name: "Cleanup"
+    script: |
+      apt-get autoremove -y && apt-get autoclean
+      rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+      
+      # Create setup log
+      echo "Setup complete" > /var/log/cws-setup.log
+
+validation:
+  - name: "Python installed"
+    command: "python3 --version"
+    success: true
+  
+  - name: "Jupyter installed"
+    command: "jupyter --version"
+    success: true
+  
+  - name: "Jupyter service running"
+    command: "systemctl is-active jupyter"
+    equals: "active"
+  
+  - name: "NumPy installed"
+    command: "python3 -c 'import numpy; print(numpy.__version__)'"
+    success: true
+  
+  - name: "Pandas installed"
+    command: "python3 -c 'import pandas; print(pandas.__version__)'"
+    success: true
+  
+  - name: "Matplotlib installed"
+    command: "python3 -c 'import matplotlib; print(matplotlib.__version__)'"
+    success: true
+  
+  - name: "scikit-learn installed"
+    command: "python3 -c 'import sklearn; print(sklearn.__version__)'"
+    success: true
+
+tags:
+  Name: "python-research"
+  Type: "research"
+  Software: "Python,Jupyter,pandas,numpy,scikit-learn"
+  Category: "data-science"
+
+instance_types:
+  x86_64: "t3.medium"
+  arm64: "t4g.medium"
+
+ports:
+  - 22   # SSH
+  - 8888 # Jupyter Notebook
+
+estimated_cost_per_hour:
+  x86_64: 0.0464
+  arm64: 0.0368
